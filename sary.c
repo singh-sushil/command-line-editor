@@ -1,12 +1,12 @@
 #include<termios.h>
 #include<stdio.h>
+//#include<curses.h>
 #include<errno.h>
 #include<stdlib.h>
 #include<unistd.h>
 #include<string.h>
 #include<sys/ioctl.h>
 #include<signal.h>
-#include"tlpi_hdr.h"
 #define _GNU_SOURCE
 #define ESC 27
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -126,7 +126,7 @@ void normalizeTerminal(struct editor_buff *buff1)
 	termios_p1 = termios_p;
 	p = termios_p;
 	termios_p.c_lflag &=~(ICANON | ISIG | IEXTEN | ECHO);
-	termios_p.c_iflag &=~(BRKINT | INPCK  | ICRNL | ISTRIP | IXON );
+	termios_p.c_iflag &=~(BRKINT | INPCK | ISTRIP | IXON );
 //	termios_p.c_oflag &=~(OPOST | ONLCR);     
 	termios_p.c_oflag |= (OPOST | ONLCR );
 	termios_p.c_cc[VMIN] = 1;
@@ -230,7 +230,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 					l = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
 					write(1,buf,l);
 					write(1,"\x1b[0K",4);
-					append_buffer(buff1,"\b",1);
+					//append_buffer(buff1,"\b",1);
 				}
 				break;
 			case ARROW_DOWN:
