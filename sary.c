@@ -1,6 +1,5 @@
 #include<termios.h>
 #include<stdio.h>
-//#include<curses.h>
 #include<errno.h>
 #include<stdlib.h>
 #include<unistd.h>
@@ -26,10 +25,13 @@ struct editor_buff
 	char *str;
 	int len;
 };
+int cy = 1, cx = 1;
 struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void position_cursor();
+//void buffer2(editor_buff *);
 static void sigwinchHandler(int sig);
 void denormalizeTerminal(struct editor_buff *buff1);
 void catch_error( char *str,int error_value,struct editor_buff *buff1);
@@ -106,16 +108,31 @@ void exit_terminal(struct editor_buff *buff1,char *argv[])
 }
 void append_buffer(struct editor_buff *buff1,const char *s , int len)
 {
-	char *new = realloc( buff1 -> str, buff1 ->len + len);
-	if (new == NULL)
+	if (strcmp(s,"\n") == 0)
+	{
+		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		if (new == NULL)
 		return;
-	memcpy(&new[buff1 -> len],s,len);
-	buff1 -> str = new;
-	buff1 -> len += len;
+		memcpy(&new[buff1 -> len],s,len);
+		buff1 -> str = new;
+		buff1 -> len += len;
+		char buffer[buff1->len-cx];
+		strcpy(buffer,(buff1->str+cx));
+		position_cursor();
+		write(STDOUT_FILENO,buffer,buff1->len-cx);
+	}
+	else
+	{
+		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		if (new == NULL)
+			return;
+		memcpy(&new[buff1 -> len],s,len);
+		buff1 -> str = new;
+		buff1 -> len += len;
+	}	
 }
 void get_windows_size(struct editor_buff *buff1)
 { 
-	
 	if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
 		catch_error("ioctl",errno,buff1);
 }
@@ -189,24 +206,25 @@ char enter_key(struct editor_buff *buff1,char *argv[])
 }
 void initiate_screen(struct editor_buff * buff1)
 {
-	if(ws.ws_row == 0 && ws.ws_col == 0)
+	if(ws.ws_row == 1 && ws.ws_col == 1)
 		catch_error("initiate_screen",errno,buff1);
 	else 
 	{
 		write(1,"\x1b[2J",4);
 		write(1,"\x1b[H",3);
-		for(int i = 0; i < ws.ws_row;i++)
-			write(1,"~\r\n",3);
+		for(int i = 1; i <= ws.ws_row; i++)
+			{
+				write(1,"~\n",2);
+				if (i == ws.ws_row)
+					write(1,"~",1);
+			}
 	}
 }
 void write_rows(struct editor_buff *buff1,char *argv[])
 {
 	write(1,"\x1b[H",3);
 	write(1,buff1->str,buff1 ->len);
-	char buf[32];
-	static 	int cy = 0, cx = 0;
-	write(1,"\x1b[0;0H",6);
-	int l = 0;
+	position_cursor();
 	while(1)
 	{
 		char c = enter_key(buff1,argv);
@@ -215,69 +233,61 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 		{
 			case BACKSPACE:
 			case DEL:
-				if ((cx == 0) && (cy == 0))
+				if ((cx == 1) && (cy == 1))
 					break;
-				if ((cx == 0) && (cy > 0))
+				if ((cx == 1) && (cy > 1))
 				{
 					cy -= 1;
 					cx = ws.ws_col;
-        			int z = snprintf(buf , sizeof(buf),	"\x1b[%d;%dH", cy,cx);
-					write(1,buf,z);
+        			position_cursor();
 				}
 				else
 				{
-					cx--;
-					l = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
-					write(1,buf,l);
+					cx-=1;
+					position_cursor();
 					write(1,"\x1b[0K",4);
 					//append_buffer(buff1,"\b",1);
 				}
 				break;
 			case ARROW_DOWN:
-				if(cy < ws.ws_row-1)
-					cy++;
-        		int a = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
-				write(1,buf,a);
+				if(cy < ws.ws_row)
+					cy+=1;
+        		position_cursor();
 				break;
 			case ARROW_UP:
-				if (cy > 0)
-					cy--;
-        		int b = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
-				write(1,buf,b);
+				if (cy > 1)
+					cy-=1;
+        		position_cursor();
 				break;
 			case ARROW_LEFT:
-				if (cx > 0)
-					cx--;
-        		int e = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
-				write(1,buf,e);
+				if (cx > 1)
+					cx-=1;
+        		position_cursor();
 				break;
 			case ARROW_RIGHT:
-				if (cx < ws.ws_col-1)
-					cx++;
-        		int d = snprintf(buf , sizeof(buf),"\x1b[%d;%dH", cy,cx);
-				write(1,buf,d);
+				if (cx < ws.ws_col)
+					cx+=1;
+        		position_cursor();
 				break;
 			case ENTERKEY:
-				if (cy < ws.ws_row-1)
+				if (cy < ws.ws_row)
 				{ 
-					cx = 0;
-					cy+=1;
-				
-				char str[2];
-				str[0] = '\n';
-				str[1] = '\0';
-				write(1,str,strlen(str));
-				append_buffer(buff1,"\n",1);
+					cy += 1;
+					cx = 1;
+					char str[2];
+					str[0] = '\n';
+					str[1] = '\0';
+					write(1,str,strlen(str));
+					append_buffer(buff1,"\n",1);
 				}
 				break; 
-
 			default:
 				if (cx < ws.ws_col)
-					cx++;
+					cx+=1;
 				else if ((cx = ws.ws_col) && (cy < ws.ws_row))
 				{
-					cx = 0;
-					cy++;
+					cx = 1;
+					cy += 1;
 				}
 				str[0] = c;
 				str[1] = '\0';
@@ -323,4 +333,10 @@ static void sigwinchHandler(int sig)
 {
 	if (ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
 		exit(EXIT_SUCCESS);
+}
+void position_cursor()
+{
+	char buf[32];
+	int z = snprintf(buf , sizeof(buf),	"\x1b[%d;%dH", cy,cx);
+	write(1,buf,z);
 }
