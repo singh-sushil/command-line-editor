@@ -26,12 +26,13 @@ struct editor_buff
 	int len;
 };
 int cy = 1, cx = 1;
+int offset;
 struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void clear_screen();
 void position_cursor();
-//void buffer2(editor_buff *);
 static void sigwinchHandler(int sig);
 void denormalizeTerminal(struct editor_buff *buff1);
 void catch_error( char *str,int error_value,struct editor_buff *buff1);
@@ -112,21 +113,27 @@ void append_buffer(struct editor_buff *buff1,const char *s , int len)
 	{
 		char *new = realloc( buff1 -> str, buff1 ->len + len);
 		if (new == NULL)
-		return;
-		memcpy(&new[buff1 -> len],s,len);
+			return;
+		//memcpy(&new[buff1 -> len],s,len);
 		buff1 -> str = new;
 		buff1 -> len += len;
-		char buffer[buff1->len-cx];
-		strcpy(buffer,(buff1->str+cx));
-		position_cursor();
-		write(STDOUT_FILENO,buffer,buff1->len-cx);
+	//	char *buffer1 = (char*)malloc(offset+1);
+		char *buffer2 = (char*)malloc(buff1->len);
+		//memcpy(buffer1,buff1->str,offset-1);
+		//strncpy(buffer1,buff1->str,offset);
+		strcpy(buffer2,(buff1->str+offset-1));
+		*(buff1 -> str + offset-1) = '\n';
+		strcpy((buff1->str+offset),buffer2);
+	//	position_cursor();
+		clear_screen();
+		write(STDOUT_FILENO,buff1->str,buff1->len+1);
 	}
 	else
 	{
 		char *new = realloc( buff1 -> str, buff1 ->len + len);
 		if (new == NULL)
 			return;
-		memcpy(&new[buff1 -> len],s,len);
+		memcpy((new+buff1->len),s,len);
 		buff1 -> str = new;
 		buff1 -> len += len;
 	}	
@@ -277,7 +284,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 					char str[2];
 					str[0] = '\n';
 					str[1] = '\0';
-					write(1,str,strlen(str));
+				//	write(1,str,strlen(str));
 					append_buffer(buff1,"\n",1);
 				}
 				break; 
@@ -337,6 +344,12 @@ static void sigwinchHandler(int sig)
 void position_cursor()
 {
 	char buf[32];
+	offset = cx;
 	int z = snprintf(buf , sizeof(buf),	"\x1b[%d;%dH", cy,cx);
 	write(1,buf,z);
+}
+void clear_screen()
+{
+	write(1,"\x1b[2J",4);
+	write(1,"\x1b[H",3);
 }
