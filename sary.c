@@ -10,6 +10,7 @@
 #define ESC 27
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define INIT { NULL , 0 }
+#define INIT1 { NULL ,1 }
 enum flag 
 { 
 	ARROW_RIGHT,
@@ -20,17 +21,25 @@ enum flag
 	ENTERKEY = 10,
 	DEL = 126
 };
+struct track_row_col
+{
+	int *col;
+	int row;
+};
 struct editor_buff 
 {
 	char *str;
 	int len;
 };
+struct track_row_col row_col = INIT1;
 int cy = 1, cx = 1;
 int offset;
 struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void track_column(struct editor_buff *buf1);
+void allocate_column(struct editor_buff *buf1);
 void clear_screen();
 void position_cursor();
 static void sigwinchHandler(int sig);
@@ -257,7 +266,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				}
 				break;
 			case ARROW_DOWN:
-				if(cy < ws.ws_row)
+				if(cy < row_col.row)
 					cy+=1;
         		position_cursor();
 				break;
@@ -272,7 +281,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
         		position_cursor();
 				break;
 			case ARROW_RIGHT:
-				if (cx < ws.ws_col)
+				if (cx < (row_col.col[cy-1]))
 					cx+=1;
         		position_cursor();
 				break;
@@ -284,6 +293,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 					char str[2];
 					str[0] = '\n';
 					str[1] = '\0';
+					row_col.row += 1;
 				//	write(1,str,strlen(str));
 					append_buffer(buff1,"\n",1);
 				}
@@ -300,6 +310,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				str[1] = '\0';
 				write(1,str,strlen(str));
 				append_buffer(buff1,str,strlen(str));
+				track_column(buff1);
 				break;
 		}
 	}
@@ -326,11 +337,19 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 		str[0] = ch;
 		str[1] = '\0';
 		append_buffer(buf1,str,strlen(str));
+		if (ch = '\n')
+		{
+			row_col.row += 1;
+		}
+		else
+		{
+			track_column(buf1);
+		} 
 	}
 	fclose(fp);
 }
 void editor_write(struct editor_buff *buf1, char *argv[])
-{
+{//	write(1,str,strlen(str));
 	get_windows_size(buf1);
 	initiate_screen(buf1);
 	buffer_to_window(buf1,argv);
@@ -352,4 +371,16 @@ void clear_screen()
 {
 	write(1,"\x1b[2J",4);
 	write(1,"\x1b[H",3);
+}	
+void allocate_column(struct editor_buff *buf1)
+{
+	int *new = realloc(row_col.col,ws.ws_col*sizeof(int));
+	if (new == NULL)
+		catch_error("allocate_column",errno,buf1);
+	row_col.col = new;
+}
+void track_column(struct editor_buff *buf1)
+{
+	allocate_column(buf1);
+	row_col.col[row_col.row-1] +=1;
 }
