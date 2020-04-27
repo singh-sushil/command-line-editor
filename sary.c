@@ -39,6 +39,7 @@ struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void append_buffer_r(struct editor_buff *buff1,const char *s , int len);
 void track_column(struct editor_buff *buf1);
 void allocate_column(struct editor_buff *buf1);
 void clear_screen();
@@ -345,7 +346,7 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 	{
 		str[0] = ch;
 		str[1] = '\0';
-		append_buffer(buf1,str,strlen(str));
+		append_buffer_r(buf1,str,strlen(str));
 		if (strcmp(str,"\n")==0)
 		{
 			row_col.row += 1;
@@ -392,4 +393,13 @@ void track_column(struct editor_buff *buf1)
 {
 	allocate_column(buf1);
 	row_col.col[row_col.row-1] +=1;
+}
+void append_buffer_r(struct editor_buff *buff1,const char *s , int len)
+{
+	char *new = realloc( buff1 -> str, buff1 ->len + len);
+	if (new == NULL)
+		return;
+	memcpy((new+buff1->len),s,len);
+	buff1 -> str = new;
+	buff1 -> len += len;
 }
