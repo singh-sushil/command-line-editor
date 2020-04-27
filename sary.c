@@ -33,6 +33,7 @@ struct editor_buff
 };
 struct track_row_col row_col = INIT1;
 int cy = 1, cx = 1;
+int cx1 = 1, cy1 = 1;
 int offset;
 struct termios termios_p;
 struct termios termios_p1;
@@ -118,7 +119,7 @@ void exit_terminal(struct editor_buff *buff1,char *argv[])
 }
 void append_buffer(struct editor_buff *buff1,const char *s , int len)
 {
-	if (strcmp(s,"\n") == 0)
+	if ((strcmp(s,"\n") == 0) && (cx1 <= row_col.col[cy1-1]))
 	{
 		char *new = realloc( buff1 -> str, buff1 ->len + len);
 		if (new == NULL)
@@ -281,20 +282,22 @@ void write_rows(struct editor_buff *buff1,char *argv[])
         		position_cursor();
 				break;
 			case ARROW_RIGHT:
-				if (cx < (row_col.col[cy-1]))
+				if (cx < (row_col.col[cy-1]+1))
 					cx+=1;
         		position_cursor();
 				break;
 			case ENTERKEY:
 				if (cy < ws.ws_row)
 				{ 
+					cx1 = cx;
+					cy1 = cy;
 					cy += 1;
 					cx = 1;
 					char str[2];
 					str[0] = '\n';
 					str[1] = '\0';
 					row_col.row += 1;
-				//	write(1,str,strlen(str));
+					write(1,str,strlen(str));
 					append_buffer(buff1,"\n",1);
 				}
 				break; 
@@ -349,7 +352,7 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 	fclose(fp);
 }
 void editor_write(struct editor_buff *buf1, char *argv[])
-{//	write(1,str,strlen(str));
+{
 	get_windows_size(buf1);
 	initiate_screen(buf1);
 	buffer_to_window(buf1,argv);
@@ -374,7 +377,7 @@ void clear_screen()
 }	
 void allocate_column(struct editor_buff *buf1)
 {
-	int *new = realloc(row_col.col,ws.ws_col*sizeof(int));
+	int *new = realloc(row_col.col,row_col.row*sizeof(int));
 	if (new == NULL)
 		catch_error("allocate_column",errno,buf1);
 	row_col.col = new;
