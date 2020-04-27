@@ -346,7 +346,7 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 		str[0] = ch;
 		str[1] = '\0';
 		append_buffer(buf1,str,strlen(str));
-		if (ch = '\n')
+		if (strcmp(str,"\n")==0)
 		{
 			row_col.row += 1;
 		}
