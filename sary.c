@@ -137,7 +137,7 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len)
 	}
 	for(int i = 0; i < (cy1-1); i++)
 	{
-		offset = offset + row_col.col[i]+1;
+		offset = offset + row_col.col[i];
 	}
 	strcpy(buffer2,(buff1->str+offset+cx1-1));
 	*(buff1 -> str +offset+ cx1-1) = s;
@@ -150,8 +150,8 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len)
 	{
 		row_col.col[j] = row_col.col[j-1];
 	}       
-	row_col.col[cy1] = row_col.col[cy1-1]-cx1+1;
-	row_col.col[cy1-1] = cx1-1;
+	row_col.col[cy1] = row_col.col[cy1-1]-cx1;
+	row_col.col[cy1-1] = cx1;
 	clear_screen();
 	write(STDOUT_FILENO,buff1->str,buff1->len+1);
 	position_cursor();
@@ -326,8 +326,8 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				str[0] = c;
 				str[1] = '\0';
 				write(1,str,strlen(str));
-				append_buffer(buff1,c,1);
 				track_column(buff1);
+				append_buffer(buff1,c,1);
 				break;
 		}
 	}
@@ -352,8 +352,9 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 				if (ch == '\n')
 				{
 					row_col.row += 1;
+					track_column(buf1);
 					cy += 1;
-					cx += 1;
+					cx = 1;
 				}
 				else
 				{
