@@ -10,7 +10,7 @@
 #define ESC 27
 #define CTRL_KEY(k) ((k) & 0x1f)
 #define INIT { NULL , 0 }
-#define INIT1 { NULL ,1 }
+#define INIT1 { NULL , 1 }
 enum flag 
 { 
 	ARROW_RIGHT,
@@ -34,12 +34,12 @@ struct editor_buff
 struct track_row_col row_col = INIT1;
 int cy = 1, cx = 1;
 int cx1 = 1, cy1 = 1;
-//int offset;
 struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
-void append_buffer_r(struct editor_buff *buff1,const char *s , int len);
+void append_buffer_enter(struct editor_buff *buff1, char s , int len);
+void append_buffer_r(struct editor_buff *buff1, char s , int len);
 void track_column(struct editor_buff *buf1);
 void allocate_column(struct editor_buff *buf1);
 void clear_screen();
@@ -49,7 +49,7 @@ void denormalizeTerminal(struct editor_buff *buff1);
 void catch_error( char *str,int error_value,struct editor_buff *buff1);
 void save_file(struct editor_buff *buff1,char *argv[]);
 void exit_terminal(struct editor_buff *buff1,char *argv[]);
-void append_buffer(struct editor_buff *buff1,const char *s , int len);
+void append_buffer(struct editor_buff *buff1, char s , int len);
 void get_windows_size(struct editor_buff *buff1);
 void normalizeTerminal(struct editor_buff *buff1);
 char enter_key(struct editor_buff *buff1,char *argv[]);
@@ -61,6 +61,7 @@ int main(int argc , char *argv[])
 {	
 	struct editor_buff buff1 = INIT;
 	struct sigaction sa;
+	allocate_column(&buff1);
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	sa.sa_handler = sigwinchHandler;
@@ -72,13 +73,14 @@ int main(int argc , char *argv[])
 }
 void denormalizeTerminal(struct editor_buff *buff1)
 {
-	 if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_p1) == -1)
-		 catch_error("tcsetattr",errno,buff1);
+	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_p1) == -1)
+		catch_error("tcsetattr",errno,buff1);
 }
 void catch_error( char *str,int error_value,struct editor_buff *buff1)
 {
 	printf("%s:%s\n",str,strerror(error_value));
-	free(buff1->str);
+	if (buff1->str != NULL)
+		free(buff1->str);
 	denormalizeTerminal(buff1);
 	exit(EXIT_FAILURE);
 }
@@ -100,7 +102,7 @@ void save_file(struct editor_buff *buff1,char *argv[])
 		strcpy(ch1,argv[1]);
 		fp = fopen(ch1,"w");
 	}
-	if ( fp == NULL)
+	if ( fp == NULL )
 	{
 		fclose(fp);
 		catch_error("save_file",errno,buff1);
@@ -111,49 +113,48 @@ void save_file(struct editor_buff *buff1,char *argv[])
 void exit_terminal(struct editor_buff *buff1,char *argv[])
 {
 	save_file(buff1,argv);
-	free(buff1 -> str);
+	if (buff1 ->str != NULL)
+		free(buff1 -> str);
 	write(1,"\x1b[2J", 4);
 	write(1,"\x1b[H", 3);
 	puts("successfully saved\n\r");
 	denormalizeTerminal(buff1);
 	exit(EXIT_SUCCESS);
 }
-void append_buffer(struct editor_buff *buff1,const char *s , int len)
+void append_buffer_enter(struct editor_buff *buff1, char s , int len)
 {
 	int offset = 0;
-	if ((strcmp(s,"\n") == 0) && (cx1 <= row_col.col[cy1-1]))
+	char *new = realloc( buff1 -> str, buff1 ->len + len);
+	if ( new == NULL )
+		return;
+	buff1 -> str = new;
+	buff1 -> len += len;
+	
+	char *buffer2 = (char*)malloc(buff1->len);
+	if (buffer2 == NULL)
 	{
-		char *new = realloc( buff1 -> str, buff1 ->len + len);
-		if (new == NULL)
-			return;
-		//memcpy(&new[buff1 -> len],s,len);
-		buff1 -> str = new;
-		buff1 -> len += len;
-	//	char *buffer1 = (char*)malloc(offset+1);
-		
-		char *buffer2 = (char*)malloc(buff1->len);
-		//memcpy(buffer1,buff1->str,offset-1);
-		//strncpy(buffer1,buff1->str,offset);
-		for(int i = 0; i < (cy1-1); i++)
-		{
-			offset = offset + row_col.col[i]+1;
-		}
-		strcpy(buffer2,(buff1->str+offset+cx1-1));
-		*(buff1 -> str +offset+ cx1-1) = '\n';
-		strcpy((buff1->str+cx1+offset),buffer2);
-	//	position_cursor();
-		clear_screen();
-		write(STDOUT_FILENO,buff1->str,buff1->len+1);
+		catch_error("append buffer malloc",errno,buff1);
 	}
-	else
+	for(int i = 0; i < (cy1-1); i++)
 	{
-		char *new = realloc( buff1 -> str, buff1 ->len + len);
-		if (new == NULL)
-			return;
-		memcpy((new+buff1->len),s,len);
-		buff1 -> str = new;
-		buff1 -> len += len;
-	}	
+		offset = offset + row_col.col[i]+1;
+	}
+	strcpy(buffer2,(buff1->str+offset+cx1-1));
+	*(buff1 -> str +offset+ cx1-1) = s;
+	strcpy((buff1->str+cx1+offset),buffer2);
+	if (buffer2 != NULL)
+	{
+		free(buffer2);
+	}
+	for (int j=row_col.row-1; j >= cy1+1; j--)
+	{
+		row_col.col[j] = row_col.col[j-1];
+	}       
+	row_col.col[cy1] = row_col.col[cy1-1]-cx1+1;
+	row_col.col[cy1-1] = cx1-1;
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len+1);
+	position_cursor();
 }
 void get_windows_size(struct editor_buff *buff1)
 { 
@@ -181,7 +182,6 @@ char enter_key(struct editor_buff *buff1,char *argv[])
 	char s[3];
 	while(nread = read(STDIN_FILENO, &c, 1)!= 1)
 	{
-
 		if (nread == -1 && errno != EAGAIN)
 			catch_error("enter_key", errno,buff1);
 	}
@@ -275,37 +275,44 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				break;
 			case ARROW_DOWN:
 				if(cy < row_col.row)
+				{
 					cy+=1;
-        		position_cursor();
+        			position_cursor();
+				}
 				break;
 			case ARROW_UP:
 				if (cy > 1)
+				{
 					cy-=1;
-        		position_cursor();
+        			position_cursor();
+				}
 				break;
 			case ARROW_LEFT:
 				if (cx > 1)
+				{
 					cx-=1;
-        		position_cursor();
+        			position_cursor();
+				}
 				break;
 			case ARROW_RIGHT:
 				if (cx < (row_col.col[cy-1]+1))
+				{
 					cx+=1;
-        		position_cursor();
+        			position_cursor();
+				}
 				break;
 			case ENTERKEY:
 				if (cy < ws.ws_row)
 				{ 
 					cx1 = cx;
 					cy1 = cy;
+					char str = '\n';
+					row_col.row += 1;
+				//	write(1,str,strlen(str));
+					track_column(buff1);
 					cy += 1;
 					cx = 1;
-					char str[2];
-					str[0] = '\n';
-					str[1] = '\0';
-					row_col.row += 1;
-					write(1,str,strlen(str));
-					append_buffer(buff1,"\n",1);
+					append_buffer_enter(buff1,str,1);
 				}
 				break; 
 			default:
@@ -319,7 +326,7 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				str[0] = c;
 				str[1] = '\0';
 				write(1,str,strlen(str));
-				append_buffer(buff1,str,strlen(str));
+				append_buffer(buff1,c,1);
 				track_column(buff1);
 				break;
 		}
@@ -337,26 +344,30 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 		{
 			return;
 		}
+		else
+		{
+			while((ch = fgetc(fp))!= EOF)
+			{
+				append_buffer_r(buf1,ch,1);
+				if (ch == '\n')
+				{
+					row_col.row += 1;
+					cy += 1;
+					cx += 1;
+				}
+				else
+				{
+					cx += 1;
+					track_column(buf1);
+				} 
+			}
+			fclose(fp);
+		}
 	}
 	else
 	{
 		return;
 	}
-	while((ch = fgetc(fp))!= EOF)
-	{
-		str[0] = ch;
-		str[1] = '\0';
-		append_buffer_r(buf1,str,strlen(str));
-		if (strcmp(str,"\n")==0)
-		{
-			row_col.row += 1;
-		}
-		else
-		{
-			track_column(buf1);
-		} 
-	}
-	fclose(fp);
 }
 void editor_write(struct editor_buff *buf1, char *argv[])
 {
@@ -373,7 +384,6 @@ static void sigwinchHandler(int sig)
 void position_cursor()
 {
 	char buf[32];
-//	offset = cx;
 	int z = snprintf(buf , sizeof(buf),	"\x1b[%d;%dH", cy,cx);
 	write(1,buf,z);
 }
@@ -392,14 +402,23 @@ void allocate_column(struct editor_buff *buf1)
 void track_column(struct editor_buff *buf1)
 {
 	allocate_column(buf1);
-	row_col.col[row_col.row-1] +=1;
+	row_col.col[cy-1] +=1;
 }
-void append_buffer_r(struct editor_buff *buff1,const char *s , int len)
+void append_buffer_r(struct editor_buff *buff1, char s , int len)
 {
 	char *new = realloc( buff1 -> str, buff1 ->len + len);
 	if (new == NULL)
 		return;
-	memcpy((new+buff1->len),s,len);
+	memcpy((new+buff1->len),&s,len);
+	buff1 -> str = new;
+	buff1 -> len += len;
+}
+void append_buffer(struct editor_buff *buff1, char s , int len)
+{
+	char *new = realloc( buff1 -> str, buff1 ->len + len);
+	if (new == NULL)
+		return;
+	memcpy((new+buff1->len),&s,len);
 	buff1 -> str = new;
 	buff1 -> len += len;
 }
