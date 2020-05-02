@@ -150,7 +150,7 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len)
 	{
 		row_col.col[j] = row_col.col[j-1];
 	}       
-	row_col.col[cy1] = row_col.col[cy1-1]-cx1;
+	row_col.col[cy1] = row_col.col[cy1-1]-cx1+1;
 	row_col.col[cy1-1] = cx1;
 	clear_screen();
 	write(STDOUT_FILENO,buff1->str,buff1->len+1);
@@ -284,7 +284,15 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				if (cy > 1)
 				{
 					cy-=1;
-        			position_cursor();
+					if (cx > row_col.col[cy-1])
+					{
+						cx = row_col.col[cy-1];
+						position_cursor();
+					}
+					else
+					{
+						position_cursor();
+					}
 				}
 				break;
 			case ARROW_LEFT:
@@ -295,7 +303,12 @@ void write_rows(struct editor_buff *buff1,char *argv[])
 				}
 				break;
 			case ARROW_RIGHT:
-				if (cx < (row_col.col[cy-1]+1))
+				if ((cy == cy1) && (cx < (row_col.col[cy-1]+1)))
+				{
+					cx+=1;
+        			position_cursor();
+				}
+				else if (cx < (row_col.col[cy-1]))
 				{
 					cx+=1;
         			position_cursor();
@@ -355,6 +368,7 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[])
 					track_column(buf1);
 					cy += 1;
 					cx = 1;
+					cy1 += 1;
 				}
 				else
 				{
