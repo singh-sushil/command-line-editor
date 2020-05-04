@@ -116,8 +116,6 @@ void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_
 }
 void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col)
 {
-	char a = '\0';
-	append_buffer_r(buff1,a,1);
 	save_file(buff1,argv,row_col);
 	if (buff1 ->str != NULL)
 		free(buff1 -> str);
@@ -286,7 +284,7 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cy+=1;
 					if (cx > *(row_col->col+cy-1))
 					{
-						cx = *(row_col->col+cy-1);
+						cx = (*(row_col->col+cy-1)>0)?(*(row_col->col+cy-1)):1;
 						position_cursor();
 					}
 					else
@@ -301,7 +299,7 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cy-=1;
 					if (cx > *(row_col->col+cy-1))
 					{
-						cx = *(row_col->col+cy-1);
+						cx = (*(row_col->col+cy-1)>0)?(*(row_col->col+cy-1)):1;
 						position_cursor();
 					}
 					else
@@ -335,8 +333,9 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cx1 = cx;
 					cy1 = cy;
 					char str = '\n';
+					if (row_col ->row == cy)
+						track_column(buff1,row_col);
 					row_col->row += 1;
-					track_column(buff1,row_col);
 					allocate_column(buff1,row_col);
 					cy += 1;
 					cx = 1;
@@ -396,8 +395,6 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[],struct track_row_co
 	}
 	else
 	{
-		char a = '\0';
-		append_buffer_r(buf1,a,1);
 		return;
 	}
 }
