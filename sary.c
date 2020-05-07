@@ -472,10 +472,6 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct trac
 		{
 			catch_error("append buffer malloc",errno,buff1,row_col);
 		}
-		for(int i = 0; i < (cy1-1); i++)
-		{
-			offset = offset + row_col->col[i];
-		}
 		strcpy(buffer2,(buff1->str+offset+cx1-1));
 		*(buff1 -> str +offset+ cx1-1) = s;
 		strcpy((buff1->str+cx1+offset),buffer2);
