@@ -50,7 +50,7 @@ void denormalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col
 void catch_error( char *str,int error_value,struct editor_buff *buff1,struct track_row_col *row_col);
 void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
 void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
-void append_buffer(struct editor_buff *buff1, char s , int len);
+void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col);
 void get_windows_size(struct editor_buff *buff1,struct track_row_col *row_col);
 void normalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col);
 char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
@@ -127,40 +127,7 @@ void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *
 	denormalizeTerminal(buff1,row_col);
 	exit(EXIT_SUCCESS);
 }
-void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
-{
-	int offset = 0;
-	char *new = realloc( buff1 -> str, buff1 ->len + len);
-	if ( new == NULL )
-		return;
-	buff1 -> str = new;
-	buff1 -> len += len;
-	char *buffer2 = (char*)malloc(buff1->len);
-	if (buffer2 == NULL)
-	{
-		catch_error("append buffer malloc",errno,buff1,row_col);
-	}
-	for(int i = 0; i < (cy1-1); i++)
-	{
-		offset = offset + row_col->col[i];
-	}
-	strcpy(buffer2,(buff1->str+offset+cx1-1));
-	*(buff1 -> str +offset+ cx1-1) = s;
-	strcpy((buff1->str+cx1+offset),buffer2);
-	if (buffer2 != NULL)
-	{
-		free(buffer2);
-	}
-	for (int j=row_col->row-1; j >= cy1+1; j--)
-	{
-		row_col->col[j] = row_col->col[j-1];
-	}       
-	row_col->col[cy1] = row_col->col[cy1-1]-cx1;
-	row_col->col[cy1-1] = cx1;
-	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len+1);
-	position_cursor();
-}
+
 void get_windows_size(struct editor_buff *buff1,struct track_row_col *row_col)
 { 
 	if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
@@ -334,27 +301,39 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cy1 = cy;
 					char str = '\n';
 					if (row_col ->row == cy)
+					{
 						track_column(buff1,row_col);
-					row_col->row += 1;
-					allocate_column(buff1,row_col);
-					cy += 1;
+						cy += 1;
+						row_col->row += 1;
+						allocate_column(buff1,row_col);
+					}
+					else
+					{
+						row_col->row += 1;
+						allocate_column(buff1,row_col);
+						cy += 1;
+						track_column(buff1,row_col);
+					}
 					cx = 1;
 					append_buffer_enter(buff1,str,1,row_col);
 				}
 				break;
 			default:
 				if (cx < ws.ws_col)
+				{	cx1 = cx;
 					cx+=1;
+				}
 				else if ((cx = ws.ws_col) && (cy < ws.ws_row))
 				{
+					cx1=cx;
 					cx = 1;
 					cy += 1;
 				}
 				str[0] = c;
 				str[1] = '\0';
-				write(1,str,strlen(str));
+			//	write(1,str,strlen(str));
 				track_column(buff1,row_col);
-				append_buffer(buff1,c,1);
+				append_buffer(buff1,c,1,row_col);
 				break;
 		}
 	}
@@ -442,14 +421,78 @@ void append_buffer_r(struct editor_buff *buff1, char s , int len)
 	buff1 -> str = new;
 	buff1 -> len += len;
 }
-void append_buffer(struct editor_buff *buff1, char s , int len)
+void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
 {
-	char *new = realloc( buff1 -> str, buff1 ->len + len);
-	if (new == NULL)
-		return;
-	memcpy((new+buff1->len),&s,len);
-	buff1 -> str = new;
-	buff1 -> len += len;
+	int offset = 0;
+	for(int i = 0; i < (cy-1); i++)
+		{
+			offset = offset + row_col->col[i];
+		}
+	if(offset+cx1 == buff1->len+len)
+		append_buffer_r(buff1,s,len);
+	else
+	{
+		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		if (new == NULL)
+			return;
+		buff1 -> str = new;
+		buff1 -> len += len;
+		char *buffer1 = (char*)malloc(buff1->len-offset-cx1+1);
+		if (buffer1 == NULL)
+		{
+			catch_error("append buffer malloc",errno,buff1,row_col);
+		}
+		strcpy(buffer1,(buff1->str+offset+cx1-1));
+		*(buff1 -> str +offset+ cx1-1) = s;
+		strcpy((buff1->str+offset+cx1),buffer1);
+		free(buffer1);
+	}
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len);
+	position_cursor();
+}
+void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
+{
+	int offset = 0;
+	for(int i = 0; i < (cy1-1); i++)
+		{
+			offset = offset + row_col->col[i];
+		}
+	if(offset+cx1 == buff1->len+len)
+		append_buffer_r(buff1,s,len);
+	else
+	{
+		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		if ( new == NULL )
+			return;
+		buff1 -> str = new;
+		buff1 -> len += len;
+		char *buffer2 = (char*)malloc(buff1->len-offset-cx1+1);
+		if (buffer2 == NULL)
+		{
+			catch_error("append buffer malloc",errno,buff1,row_col);
+		}
+		for(int i = 0; i < (cy1-1); i++)
+		{
+			offset = offset + row_col->col[i];
+		}
+		strcpy(buffer2,(buff1->str+offset+cx1-1));
+		*(buff1 -> str +offset+ cx1-1) = s;
+		strcpy((buff1->str+cx1+offset),buffer2);
+		if (buffer2 != NULL)
+		{
+			free(buffer2);
+		}
+		for (int j=row_col->row-1; j >= cy1+1; j--)
+		{
+			row_col->col[j] = row_col->col[j-1];
+		}       
+		row_col->col[cy1] = row_col->col[cy1-1]-cx1;
+		row_col->col[cy1-1] = cx1;
+	}
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len);
+	position_cursor();
 }
 void column_initializer(struct track_row_col *row_col)
 {
