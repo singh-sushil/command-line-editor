@@ -19,7 +19,9 @@ enum flag
 	ARROW_UP,
 	BACKSPACE=127,
 	ENTERKEY = 10,
-	DEL = 126
+	DEL = 126,
+	PgUP,
+	PgDn
 };
 struct track_row_col
 {
@@ -37,6 +39,8 @@ struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col);
+int offset_calculate(struct track_row_col *row_col,int x);
 void buffer_initializer(struct editor_buff *buff1);
 void column_initializer(struct track_row_col *row_col);
 void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col);
@@ -47,6 +51,7 @@ void clear_screen();
 void position_cursor();
 static void sigwinchHandler(int sig);
 void denormalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col);
+void backspace_buffer(struct editor_buff *buff1, struct track_row_col *row_col);
 void catch_error( char *str,int error_value,struct editor_buff *buff1,struct track_row_col *row_col);
 void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
 void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
@@ -228,22 +233,32 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 		switch(c)
 		{
 			case BACKSPACE:
-			case DEL:
 				if ((cx == 1) && (cy == 1))
 					break;
-				if ((cx == 1) && (cy > 1))
+			    if ((cx == 1) && (cy > 1))
 				{
+					cx1= cx;
+					cy1 = cy;
 					cy -= 1;
-					cx = ws.ws_col;
-        			position_cursor();
+					cx = row_col->col[cy-1];
 				}
 				else
 				{
+					cx1= cx;
+					cy1 = cy;
 					cx-=1;
-					position_cursor();
-					write(1,"\x1b[0K",4);
-					//append_buffer(buff1,"\b",1);
 				}
+				backspace_buffer(buff1,row_col);	
+				break;
+			case DEL:
+				cx1= cx;
+				cy1 = cy;
+				int offset = offset_calculate(row_col,cy1);
+				if((offset+cx1)>buff1->len)
+					break;
+				if(row_col->col[cy1-1]==0)
+					row_col->row -=1;
+				delete_buffer(buff1,row_col);
 				break;
 			case ARROW_DOWN:
 				if(cy < row_col->row)
@@ -331,7 +346,7 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				}
 				str[0] = c;
 				str[1] = '\0';
-			//	write(1,str,strlen(str));
+	
 				track_column(buff1,row_col);
 				append_buffer(buff1,c,1,row_col);
 				break;
@@ -423,11 +438,7 @@ void append_buffer_r(struct editor_buff *buff1, char s , int len)
 }
 void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
 {
-	int offset = 0;
-	for(int i = 0; i < (cy-1); i++)
-		{
-			offset = offset + row_col->col[i];
-		}
+	int offset = offset_calculate(row_col,cy);
 	if(offset+cx1 == buff1->len+len)
 		append_buffer_r(buff1,s,len);
 	else
@@ -453,11 +464,7 @@ void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_
 }
 void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
 {
-	int offset = 0;
-	for(int i = 0; i < (cy1-1); i++)
-		{
-			offset = offset + row_col->col[i];
-		}
+	int offset = offset_calculate(row_col,cy1);
 	if(offset+cx1 == buff1->len+len)
 		append_buffer_r(buff1,s,len);
 	else
@@ -490,7 +497,34 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct trac
 	write(STDOUT_FILENO,buff1->str,buff1->len);
 	position_cursor();
 }
+void backspace_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
+{
+	int offset = offset_calculate(row_col,cy1);
+	memmove((buff1->str+offset+cx1-2),(buff1->str+offset+cx1-1),buff1->len-offset-cx1+1);
+	buff1->len -= 1;
+	row_col->col[cy1-1]--;
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len);
+	position_cursor();
+}
+void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
+{
+	int offset = offset_calculate(row_col,cy1);
+	memmove((buff1->str+offset+cx1-1),(buff1->str+offset+cx1),buff1->len-offset-cx1+1);
+	buff1->len -= 1;
+	row_col->col[cy1-1]--;
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len);
+	position_cursor();
+}
 void column_initializer(struct track_row_col *row_col)
 {
 	*(row_col->col+row_col->row-1) = 0;
+}
+int offset_calculate(struct track_row_col *row_col,int x)
+{
+	int offset = 0;
+	for(int i = 0; i < (x-1); i++)
+		offset = offset + row_col->col[i];
+	return offset;
 }
