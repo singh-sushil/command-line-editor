@@ -39,6 +39,7 @@ struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1);
 void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col);
 int offset_calculate(struct track_row_col *row_col,int x);
 void buffer_initializer(struct editor_buff *buff1);
@@ -256,8 +257,8 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				int offset = offset_calculate(row_col,cy1);
 				if((offset+cx1)>buff1->len)
 					break;
-				if(row_col->col[cy1-1]==0)
-					row_col->row -=1;
+			//	if(row_col->col[cy1-1]==0)
+			//		row_col->row -=1;
 				delete_buffer(buff1,row_col);
 				break;
 			case ARROW_DOWN:
@@ -502,9 +503,14 @@ void backspace_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
 	int offset = offset_calculate(row_col,cy1);
 	memmove((buff1->str+offset+cx1-2),(buff1->str+offset+cx1-1),buff1->len-offset-cx1+1);
 	buff1->len -= 1;
-	row_col->col[cy1-1]--;
+	int a = cx;
+	int b = cy;
+	track_row_column(row_col,buff1);
+//	row_col->col[cy1-1]--;
 	clear_screen();
 	write(STDOUT_FILENO,buff1->str,buff1->len);
+    cx=a;
+	cy=b;
 	position_cursor();
 }
 void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
@@ -512,9 +518,14 @@ void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
 	int offset = offset_calculate(row_col,cy1);
 	memmove((buff1->str+offset+cx1-1),(buff1->str+offset+cx1),buff1->len-offset-cx1+1);
 	buff1->len -= 1;
-	row_col->col[cy1-1]--;
+	int a = cx;
+	int b = cy;
+	track_row_column(row_col,buff1);
+//	row_col->col[cy1-1]--;
 	clear_screen();
 	write(STDOUT_FILENO,buff1->str,buff1->len);
+	cx=a;
+	cy=b;
 	position_cursor();
 }
 void column_initializer(struct track_row_col *row_col)
@@ -527,4 +538,27 @@ int offset_calculate(struct track_row_col *row_col,int x)
 	for(int i = 0; i < (x-1); i++)
 		offset = offset + row_col->col[i];
 	return offset;
+}
+void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1)
+{
+	int cx=cy=cx1=cy1=1;
+    row_col->col = (int*)malloc(1);
+	row_col->row=1;
+	for (int i = 0;i < buff1->len;i++)
+	{
+		if (*(buff1->str+i) == '\n')
+		{
+			row_col->row += 1;
+			track_column(buff1,row_col);
+			allocate_column(buff1,row_col);
+			cy += 1;
+			cx = 1;
+			cy1 += 1;
+		}
+		else
+		{   
+			cx += 1;
+			track_column(buff1,row_col);
+		} 
+	}
 }
