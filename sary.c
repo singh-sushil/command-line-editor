@@ -39,6 +39,7 @@ struct termios termios_p;
 struct termios termios_p1;
 struct termios p;
 struct winsize ws;
+void write_buffer_on_screen(struct track_row_col *row_col,struct editor_buff *buff1);
 void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1);
 void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col);
 int offset_calculate(struct track_row_col *row_col,int x);
@@ -257,8 +258,6 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				int offset = offset_calculate(row_col,cy1);
 				if((offset+cx1)>buff1->len)
 					break;
-			//	if(row_col->col[cy1-1]==0)
-			//		row_col->row -=1;
 				delete_buffer(buff1,row_col);
 				break;
 			case ARROW_DOWN:
@@ -449,19 +448,17 @@ void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_
 			return;
 		buff1 -> str = new;
 		buff1 -> len += len;
-		char *buffer1 = (char*)malloc(buff1->len-offset-cx1+1);
+		char *buffer1 = (char*)malloc(buff1->len-offset-cx1);
 		if (buffer1 == NULL)
 		{
 			catch_error("append buffer malloc",errno,buff1,row_col);
 		}
-		strcpy(buffer1,(buff1->str+offset+cx1-1));
+		memmove(buffer1,(buff1->str+offset+cx1-1),buff1->len-offset-cx1);
 		*(buff1 -> str +offset+ cx1-1) = s;
-		strcpy((buff1->str+offset+cx1),buffer1);
+		memmove((buff1->str+offset+cx1),buffer1,buff1->len-offset-cx1);
 		free(buffer1);
 	}
-	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len);
-	position_cursor();
+	write_buffer_on_screen(row_col,buff1);
 }
 void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
 {
@@ -475,58 +472,34 @@ void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct trac
 			return;
 		buff1 -> str = new;
 		buff1 -> len += len;
-		char *buffer2 = (char*)malloc(buff1->len-offset-cx1+1);
+		char *buffer2 = (char*)malloc(buff1->len-offset-cx1);
 		if (buffer2 == NULL)
 		{
 			catch_error("append buffer malloc",errno,buff1,row_col);
 		}
-		strcpy(buffer2,(buff1->str+offset+cx1-1));
+		memmove(buffer2,(buff1->str+offset+cx1-1),buff1->len-offset-cx1);
 		*(buff1 -> str +offset+ cx1-1) = s;
-		strcpy((buff1->str+cx1+offset),buffer2);
+		memmove((buff1->str+cx1+offset),buffer2,buff1->len-offset-cx1);
 		if (buffer2 != NULL)
 		{
 			free(buffer2);
 		}
-		for (int j=row_col->row-1; j >= cy1+1; j--)
-		{
-			row_col->col[j] = row_col->col[j-1];
-		}       
-		row_col->col[cy1] = row_col->col[cy1-1]-cx1;
-		row_col->col[cy1-1] = cx1;
 	}
-	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len);
-	position_cursor();
+	write_buffer_on_screen(row_col,buff1);
 }
 void backspace_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
 {
 	int offset = offset_calculate(row_col,cy1);
 	memmove((buff1->str+offset+cx1-2),(buff1->str+offset+cx1-1),buff1->len-offset-cx1+1);
 	buff1->len -= 1;
-	int a = cx;
-	int b = cy;
-	track_row_column(row_col,buff1);
-//	row_col->col[cy1-1]--;
-	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len);
-    cx=a;
-	cy=b;
-	position_cursor();
+	write_buffer_on_screen(row_col,buff1);
 }
 void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
 {
 	int offset = offset_calculate(row_col,cy1);
 	memmove((buff1->str+offset+cx1-1),(buff1->str+offset+cx1),buff1->len-offset-cx1+1);
 	buff1->len -= 1;
-	int a = cx;
-	int b = cy;
-	track_row_column(row_col,buff1);
-//	row_col->col[cy1-1]--;
-	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len);
-	cx=a;
-	cy=b;
-	position_cursor();
+	write_buffer_on_screen(row_col,buff1);
 }
 void column_initializer(struct track_row_col *row_col)
 {
@@ -541,8 +514,8 @@ int offset_calculate(struct track_row_col *row_col,int x)
 }
 void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1)
 {
-	int cx=cy=cx1=cy1=1;
-    row_col->col = (int*)malloc(1);
+	cx=cy=cx1=cy1=1;
+    row_col->col = (int*)malloc(0);
 	row_col->row=1;
 	for (int i = 0;i < buff1->len;i++)
 	{
@@ -561,4 +534,15 @@ void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1)
 			track_column(buff1,row_col);
 		} 
 	}
+}
+void write_buffer_on_screen(struct track_row_col *row_col,struct editor_buff *buff1)
+{
+	int a = cx;
+	int b = cy;
+	track_row_column(row_col,buff1);
+	clear_screen();
+	write(STDOUT_FILENO,buff1->str,buff1->len);
+	cx=a;
+	cy=b;
+	position_cursor();
 }
