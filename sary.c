@@ -231,7 +231,6 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 	while(1)
 	{
 		char c = enter_key(buff1,argv,row_col);
-		char str[2];
 		switch(c)
 		{
 			case BACKSPACE:
@@ -310,28 +309,25 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				}
 				break;
 			case ENTERKEY:
-				if (cy < ws.ws_row)
-				{ 
-					cx1 = cx;
-					cy1 = cy;
-					char str = '\n';
-					if (row_col ->row == cy)
-					{
-						track_column(buff1,row_col);
-						cy += 1;
-						row_col->row += 1;
-						allocate_column(buff1,row_col);
-					}
-					else
-					{
-						row_col->row += 1;
-						allocate_column(buff1,row_col);
-						cy += 1;
-						track_column(buff1,row_col);
-					}
-					cx = 1;
-					append_buffer_enter(buff1,str,1,row_col);
+				cx1 = cx;
+				cy1 = cy;
+				char str = '\n';
+				if (row_col ->row == cy)
+				{
+					track_column(buff1,row_col);
+					cy += 1;
+					row_col->row += 1;
+					allocate_column(buff1,row_col);
 				}
+				else
+				{
+					row_col->row += 1;
+					allocate_column(buff1,row_col);
+					cy += 1;
+					track_column(buff1,row_col);
+				}
+				cx = 1;
+				append_buffer_enter(buff1,str,1,row_col);
 				break;
 			default:
 				if (cx < ws.ws_col)
@@ -344,9 +340,6 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cx = 1;
 					cy += 1;
 				}
-				str[0] = c;
-				str[1] = '\0';
-	
 				track_column(buff1,row_col);
 				append_buffer(buff1,c,1,row_col);
 				break;
@@ -450,9 +443,7 @@ void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_
 		buff1 -> len += len;
 		char *buffer1 = (char*)malloc(buff1->len-offset-cx1);
 		if (buffer1 == NULL)
-		{
 			catch_error("append buffer malloc",errno,buff1,row_col);
-		}
 		memmove(buffer1,(buff1->str+offset+cx1-1),buff1->len-offset-cx1);
 		*(buff1 -> str +offset+ cx1-1) = s;
 		memmove((buff1->str+offset+cx1),buffer1,buff1->len-offset-cx1);
