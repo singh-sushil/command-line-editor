@@ -35,67 +35,69 @@ struct editor_buff
 };
 int cy = 1, cx = 1;
 int cx1 = 1, cy1 = 1;
-struct termios termios_p;
-struct termios termios_p1;
-struct termios p;
+struct termios termios_p,termios_p1,p;
 struct winsize ws;
-void write_buffer_on_screen(struct track_row_col *row_col,struct editor_buff *buff1);
-void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1);
-void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col);
-int offset_calculate(struct track_row_col *row_col,int x);
-void buffer_initializer(struct editor_buff *buff1);
-void column_initializer(struct track_row_col *row_col);
-void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col);
-void append_buffer_r(struct editor_buff *buff1, char s , int len);
-void track_column(struct editor_buff *buf1,struct track_row_col *row_col);
-void allocate_column(struct editor_buff *buf1,struct track_row_col *row_col);
+struct editor_buff buff = INIT;
+struct track_row_col row_col = INIT1;
+void write_buffer_on_screen();
+void track_row_column();
+void delete_buffer();
+int offset_calculate(int x);
+void buffer_initializer();
+void column_initializer();
+void append_buffer_enter( char s , int len);
+void append_buffer_r( char s , int len);
+void track_column();
+void allocate_column();
 void clear_screen();
 void position_cursor();
 static void sigwinchHandler(int sig);
-void denormalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col);
-void backspace_buffer(struct editor_buff *buff1, struct track_row_col *row_col);
-void catch_error( char *str,int error_value,struct editor_buff *buff1,struct track_row_col *row_col);
-void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
-void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
-void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col);
-void get_windows_size(struct editor_buff *buff1,struct track_row_col *row_col);
-void normalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col);
-char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
-void initiate_screen(struct editor_buff * buff1,struct track_row_col *row_col);
-void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col);
-void buffer_to_window(struct editor_buff *buf1, char *argv[],struct track_row_col *row_col);
-void editor_write(struct editor_buff *buf1, char *argv[],struct track_row_col *row_col);
+void denormalizeTerminal();
+void backspace_buffer();
+void catch_error( char *str,int error_value);
+void save_file(char *argv[]);
+void exit_terminal(char *argv[]);
+void append_buffer( char s , int len);
+void get_windows_size();
+void normalizeTerminal();
+char enter_key(char *argv[]);
+void initiate_screen();
+void write_rows(char *argv[]);
+void buffer_to_window( char *argv[]);
+void editor_write( char *argv[]);
 int main(int argc , char *argv[])
-{	
-	struct editor_buff buff1 = INIT;
-	struct track_row_col row_col = INIT1;
-	struct sigaction sa;
-	allocate_column(&buff1,&row_col);
-	sigemptyset(&sa.sa_mask);
-	sa.sa_flags = 0;
-	sa.sa_handler = sigwinchHandler;
-	if (sigaction(SIGWINCH, &sa, NULL) == -1)
-		catch_error("sigaction",errno,&buff1,&row_col);
-	normalizeTerminal(&buff1,&row_col);
-	editor_write(&buff1,argv,&row_col);
+{	if(isatty(0) && isatty(1) && isatty(2))
+	{
+		struct sigaction sa;
+		allocate_column();
+		sigemptyset(&sa.sa_mask);
+		sa.sa_flags = 0;
+		sa.sa_handler = sigwinchHandler;
+		if (sigaction(SIGWINCH, &sa, NULL) == -1)
+			catch_error("sigaction",errno);
+		normalizeTerminal();
+		editor_write(argv);
+	}
+	else
+		printf("%s\n","file descripter must be associated with unix terminal");
 	return 0;
 }
-void denormalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col)
+void denormalizeTerminal()
 {
 	if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_p1) == -1)
-		catch_error("tcsetattr",errno,buff1,row_col);
+		catch_error("tcsetattr",errno);
 }
-void catch_error( char *str,int error_value,struct editor_buff *buff1,struct track_row_col *row_col)
+void catch_error( char *str,int error_value)
 {
 	printf("%s:%s\n",str,strerror(error_value));
-	if (buff1->str != NULL)
-		free(buff1->str);
-	if (row_col -> col != NULL)
-		free(row_col -> col);
-	denormalizeTerminal(buff1,row_col);
+	if (buff.str != NULL)
+		free(buff.str);
+	if (row_col.col != NULL)
+		free(row_col.col);
+	denormalizeTerminal();
 	exit(EXIT_FAILURE);
 }
-void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col)
+void save_file(char *argv[])
 {
 	char ch[20];
 	char ch1[20];
@@ -116,34 +118,34 @@ void save_file(struct editor_buff *buff1,char *argv[],struct track_row_col *row_
 	if ( fp == NULL )
 	{
 		fclose(fp);
-		catch_error("save_file",errno,buff1,row_col);
+		catch_error("save_file",errno);
 	}
-	fwrite(buff1->str,1,buff1->len,fp);
+	fwrite(buff.str,1,buff.len,fp);
 	fclose(fp);
 }
-void exit_terminal(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col)
+void exit_terminal(char *argv[])
 {
-	save_file(buff1,argv,row_col);
-	if (buff1 ->str != NULL)
-		free(buff1 -> str);
-	if (row_col -> col != NULL)
-		free(row_col -> col);
+	save_file(argv);
+	if (buff.str != NULL)
+		free(buff.str);
+	if (row_col.col != NULL)
+		free(row_col.col);
 	write(1,"\x1b[2J", 4);
 	write(1,"\x1b[H", 3);
 	puts("successfully saved\n\r");
-	denormalizeTerminal(buff1,row_col);
+	denormalizeTerminal();
 	exit(EXIT_SUCCESS);
 }
 
-void get_windows_size(struct editor_buff *buff1,struct track_row_col *row_col)
+void get_windows_size()
 { 
 	if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
-		catch_error("ioctl",errno,buff1,row_col);
+		catch_error("ioctl",errno);
 }
-void normalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col)
+void normalizeTerminal()
 {
 	if(tcgetattr(STDIN_FILENO, &termios_p) == -1)
-		catch_error("tcgetattr",errno,buff1,row_col);
+		catch_error("tcgetattr",errno);
 	termios_p1 = termios_p;
 	p = termios_p;
 	termios_p.c_lflag &=~(ICANON | ISIG | IEXTEN | ECHO);
@@ -154,7 +156,7 @@ void normalizeTerminal(struct editor_buff *buff1,struct track_row_col *row_col)
 	termios_p.c_cc[VTIME] = 0;
 	tcsetattr(STDIN_FILENO, TCSAFLUSH , &termios_p);
 }
-char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col)
+char enter_key(char *argv[])
 {
 	int nread;
 	char c;
@@ -162,7 +164,7 @@ char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_
 	while(nread = read(STDIN_FILENO, &c, 1)!= 1)
 	{
 		if (nread == -1 && errno != EAGAIN)
-			catch_error("enter_key", errno,buff1,row_col);
+			catch_error("enter_key", errno);
 	}
 	while(1)
 	{
@@ -194,7 +196,7 @@ char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_
 					if (s[2] == '~')
 						return s[2];
 			case  CTRL_KEY('q'):
-				exit_terminal(buff1,argv,row_col);
+				exit_terminal(argv);
 				break;
 			case BACKSPACE:
 			case CTRL_KEY('h'):
@@ -207,10 +209,10 @@ char enter_key(struct editor_buff *buff1,char *argv[],struct track_row_col *row_
 	return c;
 	}
 }
-void initiate_screen(struct editor_buff * buff1,struct track_row_col *row_col)
+void initiate_screen()
 {
 	if(ws.ws_row == 1 && ws.ws_col == 1)
-		catch_error("initiate_screen",errno,buff1,row_col);
+		catch_error("initiate_screen",errno);
 	else 
 	{
 		write(1,"\x1b[2J",4);
@@ -223,14 +225,14 @@ void initiate_screen(struct editor_buff * buff1,struct track_row_col *row_col)
 			}
 	}
 }
-void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row_col)
+void write_rows(char *argv[])
 {
 	write(1,"\x1b[H",3);
-	write(1,buff1->str,buff1 ->len);
+	write(1,buff.str,buff.len);
 	position_cursor();
 	while(1)
 	{
-		char c = enter_key(buff1,argv,row_col);
+		char c = enter_key(argv);
 		switch(c)
 		{
 			case BACKSPACE:
@@ -241,7 +243,7 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cx1= cx;
 					cy1 = cy;
 					cy -= 1;
-					cx = row_col->col[cy-1];
+					cx = row_col.col[cy-1];
 				}
 				else
 				{
@@ -249,44 +251,40 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 					cy1 = cy;
 					cx-=1;
 				}
-				backspace_buffer(buff1,row_col);	
+				backspace_buffer();	
 				break;
 			case DEL:
 				cx1= cx;
 				cy1 = cy;
-				int offset = offset_calculate(row_col,cy1);
-				if((offset+cx1)>buff1->len)
+				int offset = offset_calculate(cy1);
+				if((offset+cx1)>buff.len)
 					break;
-				delete_buffer(buff1,row_col);
+				delete_buffer();
 				break;
 			case ARROW_DOWN:
-				if(cy < row_col->row)
+				if(cy < row_col.row)
 				{
 					cy+=1;
-					if (cx > *(row_col->col+cy-1))
+					if (cx > *(row_col.col+cy-1))
 					{
-						cx = (*(row_col->col+cy-1)>0)?(*(row_col->col+cy-1)):1;
+						cx = (*(row_col.col+cy-1)>0)?(*(row_col.col+cy-1)):1;
 						position_cursor();
 					}
 					else
-					{
         				position_cursor();
-					}
 				}
 				break;
 			case ARROW_UP:
 				if (cy > 1)
 				{
 					cy-=1;
-					if (cx > *(row_col->col+cy-1))
+					if (cx > *(row_col.col+cy-1))
 					{
-						cx = (*(row_col->col+cy-1)>0)?(*(row_col->col+cy-1)):1;
+						cx = (*(row_col.col+cy-1)>0)?(*(row_col.col+cy-1)):1;
 						position_cursor();
 					}
 					else
-					{
 						position_cursor();
-					}
 				}
 				break;
 			case ARROW_LEFT:
@@ -297,12 +295,15 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				}
 				break;
 			case ARROW_RIGHT:
-				if ((cy == row_col->row) && (cx < *(row_col->col+cy-1)+1))
+				if (cy == row_col.row) 
 				{
-					cx+=1;
-        			position_cursor();
+					if ((cx < *(row_col.col+cy-1)+1))
+					{
+						cx+=1;
+						position_cursor();
+					}
 				}
-				else if (cx < *(row_col->col+cy-1))
+				else if (cx < *(row_col.col+cy-1))
 				{
 					cx+=1;
         			position_cursor();
@@ -312,41 +313,45 @@ void write_rows(struct editor_buff *buff1,char *argv[],struct track_row_col *row
 				cx1 = cx;
 				cy1 = cy;
 				char str = '\n';
-				if (row_col ->row == cy)
+				if (row_col.row == cy)
 				{
-					track_column(buff1,row_col);
+					track_column();
 					cy += 1;
-					row_col->row += 1;
-					allocate_column(buff1,row_col);
+					row_col.row += 1;
+					allocate_column();
 				}
 				else
 				{
-					row_col->row += 1;
-					allocate_column(buff1,row_col);
+					row_col.row += 1;
+					allocate_column();
 					cy += 1;
-					track_column(buff1,row_col);
+					track_column();
 				}
 				cx = 1;
-				append_buffer_enter(buff1,str,1,row_col);
+				append_buffer_enter(str,1);
 				break;
 			default:
-				if (cx < ws.ws_col)
-				{	cx1 = cx;
-					cx+=1;
-				}
-				else if ((cx = ws.ws_col) && (cy < ws.ws_row))
+				if (cx == ws.ws_col)
 				{
-					cx1=cx;
+					cx1=0;
 					cx = 1;
+					track_column();
 					cy += 1;
+					row_col.row += 1;
+					allocate_column();
 				}
-				track_column(buff1,row_col);
-				append_buffer(buff1,c,1,row_col);
+				else if (cx < ws.ws_col)
+				{	
+					cx1 = cx;
+					cx+=1;
+					track_column();
+				}
+				append_buffer(c,1);
 				break;
 		}
 	}
 }
-void buffer_to_window(struct editor_buff *buf1, char *argv[],struct track_row_col *row_col)
+void buffer_to_window( char *argv[])
 {
 	char ch;
 	char str[2];
@@ -354,19 +359,17 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[],struct track_row_co
 	if (argv[1] != NULL)
 	{
 		if ((fp = fopen(argv[1],"r")) == NULL)
-		{
 			return;
-		}
 		else
 		{
 			while((ch = fgetc(fp))!= EOF)
 			{
-				append_buffer_r(buf1,ch,1);
-				if (ch == '\n')
+				append_buffer_r(ch,1);
+				if ((ch == '\n') || (cx == ws.ws_col && ch != '\n'))
 				{
-					row_col->row += 1;
-					track_column(buf1,row_col);
-					allocate_column(buf1,row_col);
+					row_col.row += 1;
+					track_column();
+					allocate_column();
 					cy += 1;
 					cx = 1;
 					cy1 += 1;
@@ -374,28 +377,27 @@ void buffer_to_window(struct editor_buff *buf1, char *argv[],struct track_row_co
 				else
 				{
 					cx += 1;
-					track_column(buf1,row_col);
+					track_column();
 				} 
 			}
 			fclose(fp);
 		}
 	}
 	else
-	{
 		return;
-	}
 }
-void editor_write(struct editor_buff *buf1, char *argv[],struct track_row_col *row_col)
+void editor_write( char *argv[])
 {
-	get_windows_size(buf1,row_col);
-	initiate_screen(buf1,row_col);
-	buffer_to_window(buf1,argv,row_col);
-	write_rows(buf1,argv,row_col);
+	get_windows_size();
+	initiate_screen();
+	buffer_to_window(argv);
+	write_rows(argv);
 }
 static void sigwinchHandler(int sig)
 {
 	if (ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
 		exit(EXIT_SUCCESS);
+    write_buffer_on_screen();
 }
 void position_cursor()
 {
@@ -408,113 +410,108 @@ void clear_screen()
 	write(1,"\x1b[2J",4);
 	write(1,"\x1b[H",3);
 }	
-void allocate_column(struct editor_buff *buf1,struct track_row_col *row_col)
+void allocate_column()
 {
-	int *new = realloc(row_col->col,row_col->row*sizeof(int));
+	int *new = realloc(row_col.col,row_col.row*sizeof(int));
 	if (new == NULL)
-		catch_error("allocate_column",errno,buf1,row_col);
-	row_col->col = new;
-	column_initializer(row_col);
+		catch_error("allocate_column",errno);
+	row_col.col = new;
+	column_initializer();
 }
-void track_column(struct editor_buff *buf1,struct track_row_col *row_col)
+void track_column()
 {
-	*(row_col->col+cy-1) +=1;
+	*(row_col.col+cy-1) +=1;
 }
-void append_buffer_r(struct editor_buff *buff1, char s , int len)
+void append_buffer_r( char s , int len)
 {
-	char *new = realloc( buff1 -> str, buff1 ->len + len);
+	char *new = realloc( buff.str, buff.len + len);
 	if (new == NULL)
 		return;
-	memcpy((new+buff1->len),&s,len);
-	buff1 -> str = new;
-	buff1 -> len += len;
+	memcpy((new+buff.len),&s,len);
+	buff.str = new;
+	buff.len += len;
 }
-void append_buffer(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
+void append_buffer( char s , int len)
 {
-	int offset = offset_calculate(row_col,cy);
-	if(offset+cx1 == buff1->len+len)
-		append_buffer_r(buff1,s,len);
+	int offset = offset_calculate(cy);
+	if(offset+cx1 == buff.len+len)
+		append_buffer_r(s,len);
 	else
 	{
-		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		char *new = realloc( buff.str, buff.len + len);
 		if (new == NULL)
 			return;
-		buff1 -> str = new;
-		buff1 -> len += len;
-		char *buffer1 = (char*)malloc(buff1->len-offset-cx1);
+		buff.str = new;
+		buff.len += len;
+		char *buffer1 = (char*)malloc(buff.len-offset-cx1);
 		if (buffer1 == NULL)
-			catch_error("append buffer malloc",errno,buff1,row_col);
-		memmove(buffer1,(buff1->str+offset+cx1-1),buff1->len-offset-cx1);
-		*(buff1 -> str +offset+ cx1-1) = s;
-		memmove((buff1->str+offset+cx1),buffer1,buff1->len-offset-cx1);
+			catch_error("append_buffer malloc",errno);
+		memmove(buffer1,(buff.str+offset+cx1-1),buff.len-offset-cx1);
+		*(buff.str +offset+ cx1-1) = s;
+		memmove((buff.str+offset+cx1),buffer1,buff.len-offset-cx1);
 		free(buffer1);
 	}
-	write_buffer_on_screen(row_col,buff1);
+	write_buffer_on_screen();
 }
-void append_buffer_enter(struct editor_buff *buff1, char s , int len,struct track_row_col *row_col)
+void append_buffer_enter( char s , int len)
 {
-	int offset = offset_calculate(row_col,cy1);
-	if(offset+cx1 == buff1->len+len)
-		append_buffer_r(buff1,s,len);
+	int offset = offset_calculate(cy1);
+	if(offset+cx1 == buff.len+len)
+		append_buffer_r(s,len);
 	else
 	{
-		char *new = realloc( buff1 -> str, buff1 ->len + len);
+		char *new = realloc( buff.str, buff.len + len);
 		if ( new == NULL )
 			return;
-		buff1 -> str = new;
-		buff1 -> len += len;
-		char *buffer2 = (char*)malloc(buff1->len-offset-cx1);
+		buff.str = new;
+		buff.len += len;
+		char *buffer2 = (char*)malloc(buff.len-offset-cx1);
 		if (buffer2 == NULL)
-		{
-			catch_error("append buffer malloc",errno,buff1,row_col);
-		}
-		memmove(buffer2,(buff1->str+offset+cx1-1),buff1->len-offset-cx1);
-		*(buff1 -> str +offset+ cx1-1) = s;
-		memmove((buff1->str+cx1+offset),buffer2,buff1->len-offset-cx1);
-		if (buffer2 != NULL)
-		{
-			free(buffer2);
-		}
+			catch_error("append_buffer_enter malloc",errno);
+		memmove(buffer2,(buff.str+offset+cx1-1),buff.len-offset-cx1);
+		*(buff.str +offset+ cx1-1) = s;
+		memmove((buff.str+cx1+offset),buffer2,buff.len-offset-cx1);
+		free(buffer2);
 	}
-	write_buffer_on_screen(row_col,buff1);
+	write_buffer_on_screen();
 }
-void backspace_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
+void backspace_buffer()
 {
-	int offset = offset_calculate(row_col,cy1);
-	memmove((buff1->str+offset+cx1-2),(buff1->str+offset+cx1-1),buff1->len-offset-cx1+1);
-	buff1->len -= 1;
-	write_buffer_on_screen(row_col,buff1);
+	int offset = offset_calculate(cy1);
+	memmove((buff.str+offset+cx1-2),(buff.str+offset+cx1-1),buff.len-offset-cx1+1);
+	buff.len -= 1;
+	write_buffer_on_screen();
 }
-void delete_buffer(struct editor_buff *buff1,struct track_row_col *row_col)
+void delete_buffer()
 {
-	int offset = offset_calculate(row_col,cy1);
-	memmove((buff1->str+offset+cx1-1),(buff1->str+offset+cx1),buff1->len-offset-cx1+1);
-	buff1->len -= 1;
-	write_buffer_on_screen(row_col,buff1);
+	int offset = offset_calculate(cy1);
+	memmove((buff.str+offset+cx1-1),(buff.str+offset+cx1),buff.len-offset-cx1+1);
+	buff.len -= 1;
+	write_buffer_on_screen();
 }
-void column_initializer(struct track_row_col *row_col)
+void column_initializer()
 {
-	*(row_col->col+row_col->row-1) = 0;
+	*(row_col.col+row_col.row-1) = 0;
 }
-int offset_calculate(struct track_row_col *row_col,int x)
+int offset_calculate(int x)
 {
 	int offset = 0;
 	for(int i = 0; i < (x-1); i++)
-		offset = offset + row_col->col[i];
+		offset = offset + row_col.col[i];
 	return offset;
 }
-void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1)
+void track_row_column()
 {
 	cx=cy=cx1=cy1=1;
-    row_col->col = (int*)malloc(0);
-	row_col->row=1;
-	for (int i = 0;i < buff1->len;i++)
+    row_col.col = (int*)malloc(0);
+	row_col.row=1;
+	for (int i = 0;i < buff.len;i++)
 	{
-		if (*(buff1->str+i) == '\n')
+		if (*(buff.str+i) == '\n' || (cx == ws.ws_col && *(buff.str+i) != '\n'))
 		{
-			row_col->row += 1;
-			track_column(buff1,row_col);
-			allocate_column(buff1,row_col);
+			row_col.row += 1;
+			track_column();
+			allocate_column();
 			cy += 1;
 			cx = 1;
 			cy1 += 1;
@@ -522,17 +519,17 @@ void track_row_column(struct track_row_col *row_col,struct editor_buff *buff1)
 		else
 		{   
 			cx += 1;
-			track_column(buff1,row_col);
+			track_column();
 		} 
 	}
 }
-void write_buffer_on_screen(struct track_row_col *row_col,struct editor_buff *buff1)
+void write_buffer_on_screen()
 {
 	int a = cx;
 	int b = cy;
-	track_row_column(row_col,buff1);
+	track_row_column();
 	clear_screen();
-	write(STDOUT_FILENO,buff1->str,buff1->len);
+	write(STDOUT_FILENO,buff.str,buff.len);
 	cx=a;
 	cy=b;
 	position_cursor();
