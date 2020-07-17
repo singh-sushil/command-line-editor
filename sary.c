@@ -28,7 +28,7 @@ struct editor_buff {
 };
 struct editor_buff buff = INIT;
 struct track_row_col row_col = INIT1;
-int cy = 1, cx = 1,cx1 = 1, cy1 = 1,y=1,x=1,lenwbs,tindex,bindex;
+int cy = 1, cx = 1,cx1 = 1, cy1 = 1,y=1,x=1,lenwbs,tindex,bindex;//bindex and tindex refers to bottom index and top index of buffer.it is used while scrolling.
 char ch[20];
 bool INS_mode = false;
 void denormalizeTerminal();
@@ -41,6 +41,7 @@ void delay(int milliseconds){
     while( (now-then) < pause )
         now = clock();
 }
+/*clear entire screen and delete all lines saved in scrollback buffer and put the cursor to home position*/
 void clear_screen(){
     write(1,"\x1b[2J",4);
     write(1,"\x1b[3J",4);
@@ -57,6 +58,7 @@ void position_cursor(){
     int z = snprintf(buf , sizeof(buf),    "\x1b[%d;%dH", y,cx);
     write(1,buf,z);
 }
+/*implement tildes symbol on terminal which  indicate the unwritten rows*/
 void initiate_screen()
 {
     if(ws.ws_row == 1 && ws.ws_col == 1)
@@ -101,13 +103,14 @@ void write_buffer_on_screen(){
 void track_column(){
     ++(*(row_col.col+cy-1));
 }
+/*find position of cursor*/
 void track_row_column(){
     cx=1,cy=1;
     row_col.col = (int*)malloc(1);
     row_col.row=1;
     allocate_column();
     for (int i = 0; i < buff.len; i++){   
-        if (*(buff.str+i) == '\n' || (cx == ws.ws_col && *(buff.str+i) != '\n')){
+        if (*(buff.str+i) == '\n' || (cx == ws.ws_col && *(buff.str+i) != '\0')){
             ++row_col.row;
             track_column();
             allocate_column();
@@ -119,6 +122,7 @@ void track_row_column(){
         } 
     }
 }
+/*find the postion of cursor on rewraping of terminal window*/
 void track_row_column1(){
     int n = offset_calculate(cy)+cx;
     int m,j;
@@ -146,11 +150,15 @@ void track_row_column1(){
     }
     else{
         bindex = tindex + ws.ws_row;
-        if(row_col.row +1 <= bindex ) lenwbs = offset_calculate(bindex)-offset_calculate(tindex);
+        if(row_col.row +1 <= bindex ){
+            bindex = row_col.row+1;
+            lenwbs = offset_calculate(bindex)-offset_calculate(tindex);
+        }
         else lenwbs = offset_calculate(bindex)-offset_calculate(tindex)-1;
     }
     y = cy1-tindex+1;
 }
+/*implementation of delete key*/
 void delete_buffer(){
     int offset = offset_calculate(cy1);
     memmove(buff.str+offset+cx1-1,buff.str+offset+cx1,buff.len-offset-cx1+1);
@@ -173,6 +181,7 @@ void append_buffer_r( char s , int len){
     buff.str = new;
     buff.len += len;
 }
+/*detect the change in the terminal size and carried out operation on respective change*/
 static void sigwinchHandler(int sig){
     if (ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
         exit(EXIT_SUCCESS);
@@ -180,6 +189,7 @@ static void sigwinchHandler(int sig){
     cx = cx1,cy = cy1;
     write_buffer_on_screen();
 }
+/*implementation of backspace key*/
 void backspace_buffer(){
     int offset = offset_calculate(cy1);
     memmove(buff.str+offset+cx1-2,buff.str+offset+cx1-1,buff.len-offset-cx1+1);
@@ -206,6 +216,10 @@ void backspace_buffer(){
         lenwbs = offset_calculate(bindex)-offset_calculate(tindex)-1;
     write_buffer_on_screen();
 }
+/*Noncanonical mode, disable signals, extended input processing, and echoing
+disable special handling of BREAK,
+enable all output processing,
+character at a time input with breaking*/
 void normalizeTerminal(){
     if(tcgetattr(STDIN_FILENO, &termios_p) == -1)
         catch_error("tcgetattr",errno);
@@ -215,10 +229,11 @@ void normalizeTerminal(){
     termios_p.c_iflag &=~(BRKINT | INPCK | ISTRIP | IXON );
     termios_p.c_cflag |= (CS8);
     termios_p.c_oflag |= (OPOST | ONLCR );
-    termios_p.c_cc[VMIN] = 1;
+    termios_p.c_cc[VMIN] = 1; 
     termios_p.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH , &termios_p);
 }
+/*save file*/
 void save_file(char *argv[],bool EXIT_mode){
     clear_screen();
     denormalizeTerminal();
@@ -261,6 +276,7 @@ void save_file(char *argv[],bool EXIT_mode){
         write_buffer_on_screen();
     }
 }
+/*exit the cli editor*/
 void exit_terminal(char *argv[]){
     char flag;
     clear_screen();
@@ -276,6 +292,7 @@ void exit_terminal(char *argv[]){
         free(row_col.col);
     exit(EXIT_SUCCESS);
 }
+/*new character is appended to existing buffer*/
 void append_buffer( char s , int len){
     int offset = offset_calculate(cy1);
     if(offset+cx1 == buff.len+len)
@@ -319,6 +336,7 @@ void get_windows_size(){
     if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
         catch_error("ioctl",errno);
 }
+/*enter_key() identify the key pressed by user*/
 int enter_key(char *argv[]){
     int nread;
     char c;
@@ -402,6 +420,7 @@ int enter_key(char *argv[]){
     }
     return c;
 }
+/* write_rows() process the key that are identified by enter_key()*/
 void write_rows(char *argv[]){   
     cx = 1,cy = 1;
     tindex = 1,bindex = ws.ws_row+1;
@@ -602,6 +621,7 @@ void write_rows(char *argv[]){
         }
     }
 }
+/*firstly read the existing file if opened and then copy the file element to buffer*/
 void buffer_to_window( char *argv[]){
     char ch;
     char str[2];
@@ -663,10 +683,12 @@ int main(int argc , char *argv[]){
         printf("%s\n","file descripter must be associated with unix-like terminal");
     return 0;
 }
+/*disabling raw input handling mode*/
 void denormalizeTerminal(){
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_p1) == -1)
         catch_error("tcsetattr",errno);
 }
+/*error handling function*/
 void catch_error( char *str,int error_value){
     clear_screen();
     printf("%s:%s\n",str,strerror(error_value));
