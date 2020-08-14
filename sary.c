@@ -1,3 +1,17 @@
+/*OVERVIEW OF CODE HOW ACTUALLY IT WORKS:
+Terminal attributes are defined in termios structure which comes under <termios.h> header file.
+Certain attributes of terminal are modified using tcgetattr() and tcsetatter() to enable raw input mode in terminal.
+A buffer is defined of type struct editor_buff. Whatever alphanumeric keys,symbol written on editor,all are stored in the
+form of character in buffer named 'buff' in respective sequential position where the key is pressed in terminal window.
+The buffer is updated whenever any of key is typed  and then terminal screen is cleared using escape 
+sequence command and then the updated buffer which is string buffer is printed on terminal screen on each keystroke.
+ */
+/*mouse scrolling and touch pad scrolling is not implemented.i am working on it.
+scrolling can be performed with arrow key UP_ARROW and DOWN_ARROW ,PgUp and PgDn.
+Horizontal scrolling is not implemented.While implementing scrolling,as the buffer is string buffer named 'buff',the
+substring of buffer 'buff' is selected in such a way that it fits the terminal window and respective substring is dis-
+played on terminal window whenever ARROW_UP,ARROW_DOWN,PgUp,PgDn is pressed. Substring is selected with help of appro-
+priate value of two index variable 'tindex','bindex' which means topindex and bottomindex respectively*/
 #include<termios.h>
 #include<stdio.h>
 #include<errno.h>
@@ -16,12 +30,16 @@
 enum flags { 
     NUL=0,ESC=27,BACKSPACE=127,ENTERKEY = 10,TAB = 9,ARROW_UP=1000,ARROW_DOWN,ARROW_RIGHT,ARROW_LEFT,PgUP,PgDn,DEL,HOME,END,INS,SAVE
 };
+/*termios structure defines the terminal attributes*/
 struct termios termios_p,termios_p1,p;
+/*winsize structure records the terminal window size*/
 struct winsize ws;
+/*structure for tracing the row and column  of recent character with respect to the terminal window size*/
 struct track_row_col{
     int *col;
     int row;
 };
+/*structure for string buffer to record the typed characters*/
 struct editor_buff {
     char *str;
     long len;
@@ -30,9 +48,11 @@ struct editor_buff buff = INIT;
 struct track_row_col row_col = INIT1;
 int cy = 1, cx = 1,cx1 = 1, cy1 = 1,y=1,x=1,lenwbs,tindex,bindex;//bindex and tindex refers to bottom index and top index of buffer.it is used while scrolling.
 char ch[20];
-bool INS_mode = false;
-void denormalizeTerminal();
-void catch_error( char *str,int error_value);
+bool INS_mode = false; //to detect whether insert key is pressed or not. by default INS_mode is  false which indi
+                       //cates that insert key is not pressed initially.
+void denormalizeTerminal(); //disables raw input mode and brings terminal to default mode.
+void catch_error( char *str,int error_value);//error handling function
+/*this delay() function delay the further execution of program by specified milliseconds*/
 void delay(int milliseconds){
     long pause;
     clock_t now,then;
@@ -41,24 +61,26 @@ void delay(int milliseconds){
     while( (now-then) < pause )
         now = clock();
 }
-/*clear entire screen and delete all lines saved in scrollback buffer and put the cursor to home position*/
+/*clear_screen() clear entire screen and delete all lines saved in scrollback buffer and put the cursor to home position*/
 void clear_screen(){
     write(1,"\x1b[2J",4);
     write(1,"\x1b[3J",4);
     write(1,"\x1b[H",3);
 }    
+/*offset_calculate() calculate the total number of characters above current row*/
 int offset_calculate(int x){
     int offset = 0;
     for(int i = 0; i < x-1; i++)
         offset += row_col.col[i];
     return offset;
 }
+/* position_cursor() write the cursor to specified position on terminal window*/
 void position_cursor(){
     char buf[10];
     int z = snprintf(buf , sizeof(buf),    "\x1b[%d;%dH", y,cx);
     write(1,buf,z);
 }
-/*implement tildes symbol on terminal which  indicate the unwritten rows*/
+/*initiate_screen() implement tildes symbol on terminal which  indicate the unwritten rows*/
 void initiate_screen()
 {
     if(ws.ws_row == 1 && ws.ws_col == 1)
@@ -84,9 +106,11 @@ void initiate_screen()
         }
     }
 }
+/*column_initializer() initializes the size of newly created column to 0*/
 void column_initializer(){
     *(row_col.col+row_col.row-1) = 0;
 }
+/*memory for the number of columns is dynamically allocated using realloc*/
 void allocate_column(){
     int *new = realloc(row_col.col,row_col.row*sizeof(int));
     if (new == NULL)
@@ -94,16 +118,18 @@ void allocate_column(){
     row_col.col = new;
     column_initializer();
 }
+/*write_buffer_on_screen writes() the updated buffer named 'buf' on cleared screen after each keystroke*/
 void write_buffer_on_screen(){
     clear_screen();
     write(STDOUT_FILENO,buff.str+offset_calculate(tindex),lenwbs);
     initiate_screen();
     position_cursor();
 }
+/*track_column() traces the number of columns in each row according to the current size of terminal window*/
 void track_column(){
     ++(*(row_col.col+cy-1));
 }
-/*find position of cursor*/
+/*track_row_column() finds position of cursor according to current size of terminal window*/
 void track_row_column(){
     cx=1,cy=1;
     row_col.col = (int*)malloc(1);
@@ -122,7 +148,7 @@ void track_row_column(){
         } 
     }
 }
-/*find the postion of cursor on rewraping of terminal window*/
+/*track_row_cloumn1() finds the postion of cursor on rewraping of terminal window*/
 void track_row_column1(){
     int n = offset_calculate(cy)+cx;
     int m,j;
@@ -158,7 +184,7 @@ void track_row_column1(){
     }
     y = cy1-tindex+1;
 }
-/*implementation of delete key*/
+/*delete_buffer() implements the delete key*/
 void delete_buffer(){
     int offset = offset_calculate(cy1);
     memmove(buff.str+offset+cx1-1,buff.str+offset+cx1,buff.len-offset-cx1+1);
@@ -173,6 +199,7 @@ void delete_buffer(){
         lenwbs = offset_calculate(bindex)-offset_calculate(tindex)-1;
     write_buffer_on_screen();
 }
+/*append_buffer_r() appends characters at the end of buffer named 'buff' */
 void append_buffer_r( char s , int len){
     char *new = realloc( buff.str, buff.len + len);
     if (new == NULL)
@@ -181,7 +208,7 @@ void append_buffer_r( char s , int len){
     buff.str = new;
     buff.len += len;
 }
-/*detect the change in the terminal size and carried out operation on respective change*/
+/*sigwinchHandler() detects the change in the terminal size and carries out operation on respective change*/
 static void sigwinchHandler(int sig){
     if (ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
         exit(EXIT_SUCCESS);
@@ -189,7 +216,7 @@ static void sigwinchHandler(int sig){
     cx = cx1,cy = cy1;
     write_buffer_on_screen();
 }
-/*implementation of backspace key*/
+/*backspace_buffer() implements the backspace key on buffer named 'buff'*/
 void backspace_buffer(){
     int offset = offset_calculate(cy1);
     memmove(buff.str+offset+cx1-2,buff.str+offset+cx1-1,buff.len-offset-cx1+1);
@@ -216,7 +243,8 @@ void backspace_buffer(){
         lenwbs = offset_calculate(bindex)-offset_calculate(tindex)-1;
     write_buffer_on_screen();
 }
-/*Noncanonical mode, disable signals, extended input processing, and echoing
+/*normalizeTerminal() enable raw input mode on terminal window,
+Noncanonical mode, disable signals, extended input processing, and echoing
 disable special handling of BREAK,
 enable all output processing,
 character at a time input with breaking*/
@@ -233,7 +261,8 @@ void normalizeTerminal(){
     termios_p.c_cc[VTIME] = 0;
     tcsetattr(STDIN_FILENO, TCSAFLUSH , &termios_p);
 }
-/*save file*/
+/*save file() saves the buffer named 'buff' in file. filename can be given as command line argument
+or also can be specified at the time of saving*/
 void save_file(char *argv[],bool EXIT_mode){
     clear_screen();
     denormalizeTerminal();
@@ -276,7 +305,7 @@ void save_file(char *argv[],bool EXIT_mode){
         write_buffer_on_screen();
     }
 }
-/*exit the cli editor*/
+/*exit_terminal() exits the cli editor*/
 void exit_terminal(char *argv[]){
     char flag;
     clear_screen();
@@ -292,7 +321,7 @@ void exit_terminal(char *argv[]){
         free(row_col.col);
     exit(EXIT_SUCCESS);
 }
-/*new character is appended to existing buffer*/
+/*append_buffer() appends new characters at specified position in buffer named 'buff'*/
 void append_buffer( char s , int len){
     int offset = offset_calculate(cy1);
     if(offset+cx1 == buff.len+len)
@@ -332,11 +361,12 @@ void append_buffer( char s , int len){
         lenwbs = offset_calculate(bindex)-offset_calculate(tindex)-1;
     write_buffer_on_screen();
 }
+/*get_windows_size() enquires current terminal window size and save it in  ws of type struct winsize*/
 void get_windows_size(){ 
     if(ioctl(STDIN_FILENO,TIOCGWINSZ, &ws) == -1)
         catch_error("ioctl",errno);
 }
-/*enter_key() identify the key pressed by user*/
+/*enter_key() identifies the key pressed by user and return the corresponding value of key to calling function*/
 int enter_key(char *argv[]){
     int nread;
     char c;
@@ -420,7 +450,9 @@ int enter_key(char *argv[]){
     }
     return c;
 }
-/* write_rows() process the key that are identified by enter_key()*/
+/* write_rows() process the key that are identified by enter_key(). if any pre existing file is opened then
+firstly the content of that file is written on terminal window and then the keys are processed as identified
+by enter_key() */
 void write_rows(char *argv[]){   
     cx = 1,cy = 1;
     tindex = 1,bindex = ws.ws_row+1;
@@ -621,7 +653,7 @@ void write_rows(char *argv[]){
         }
     }
 }
-/*firstly read the existing file if opened and then copy the file element to buffer*/
+/*buffer_to_window() firstly reads the existing file if opened and then copy the file element to buffer named 'buff'*/
 void buffer_to_window( char *argv[]){
     char ch;
     char str[2];
@@ -662,6 +694,7 @@ void buffer_to_window( char *argv[]){
     }else
         return;
 }
+/*editor_write() is called  by main() after raw input mode is enabled*/
 void editor_write( char *argv[]){
     get_windows_size();
     buffer_to_window(argv);
@@ -669,7 +702,7 @@ void editor_write( char *argv[]){
     write_rows(argv);
 }
 int main(int argc , char *argv[]){    
-    if(isatty(0) && isatty(1) && isatty(2)){
+    if(isatty(0) && isatty(1) && isatty(2)){//check whether the terminal is unix like or not
         struct sigaction sa;
         allocate_column();
         sigemptyset(&sa.sa_mask);
@@ -683,12 +716,12 @@ int main(int argc , char *argv[]){
         printf("%s\n","file descripter must be associated with unix-like terminal");
     return 0;
 }
-/*disabling raw input handling mode*/
+/*denormalizeTerminal() disables raw input handling mode*/
 void denormalizeTerminal(){
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_p1) == -1)
         catch_error("tcsetattr",errno);
 }
-/*error handling function*/
+/*catch_error() is error handling function*/
 void catch_error( char *str,int error_value){
     clear_screen();
     printf("%s:%s\n",str,strerror(error_value));
